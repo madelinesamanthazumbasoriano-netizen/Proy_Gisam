@@ -33,3 +33,4 @@ En Android Emulator, el backend local se alcanza mediante `10.0.2.2:5000`. En un
 ## Nota sobre los recursos visuales
 El ZIP recibido en esta conversación no contiene los JPG mencionados en la documentación, por lo que `assets/themes/` queda preparado pero no incluye imágenes inventadas. Copia allí los archivos reales y ya están declarados en `pubspec.yaml`.
 # Proy_Gisam
+# Proy_Gisam
