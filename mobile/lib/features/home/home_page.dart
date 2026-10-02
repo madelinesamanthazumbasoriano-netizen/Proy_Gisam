@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../core/gisam_controller.dart';
+import 'spirit_tree.dart';
 
 class HomePage extends StatelessWidget {
   final GisamController controller;
@@ -16,7 +18,8 @@ class HomePage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text('GISAM', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+            const Text('GISAM',
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
             const Text('Tu espacio de bienestar y crecimiento'),
             const SizedBox(height: 20),
             Card(
@@ -26,12 +29,7 @@ class HomePage extends StatelessWidget {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(24),
-                      child: Image.asset(
-                        'assets/themes/inicio/Arbol.jpg',
-                        width: 190,
-                        height: 190,
-                        fit: BoxFit.cover,
-                      ),
+                      child: const SpiritTree(),
                     ),
                     const SizedBox(height: 14),
                     const Text(
@@ -44,7 +42,8 @@ class HomePage extends StatelessWidget {
                     const SizedBox(height: 16),
                     _StatRow(icon: '💧', label: 'Agua', value: p.water),
                     _StatRow(icon: '❤️', label: 'Salud', value: p.health),
-                    _StatRow(icon: '😊', label: 'Felicidad', value: p.happiness),
+                    _StatRow(
+                        icon: '😊', label: 'Felicidad', value: p.happiness),
                   ],
                 ),
               ),
@@ -56,7 +55,9 @@ class HomePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Nivel ${p.level}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text('Nivel ${p.level}',
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     LinearProgressIndicator(value: p.progress, minHeight: 12),
                     const SizedBox(height: 8),
@@ -66,14 +67,17 @@ class HomePage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            const Text('🎯 Misiones', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const Text('🎯 Misiones',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
             ...controller.missions.map(
               (mission) => Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
                   leading: Icon(
-                    mission.completed ? Icons.check_circle : Icons.radio_button_unchecked,
+                    mission.completed
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
                     color: mission.completed ? Colors.green : null,
                   ),
                   title: Text(mission.title),
@@ -84,7 +88,9 @@ class HomePage extends StatelessWidget {
                           await controller.completeMission(mission.id);
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('🎉 ${mission.title} +${mission.xp} XP')),
+                              SnackBar(
+                                  content: Text(
+                                      '🎉 ${mission.title} +${mission.xp} XP')),
                             );
                           }
                         },
@@ -103,7 +109,8 @@ class _StatRow extends StatelessWidget {
   final String label;
   final int value;
 
-  const _StatRow({required this.icon, required this.label, required this.value});
+  const _StatRow(
+      {required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {

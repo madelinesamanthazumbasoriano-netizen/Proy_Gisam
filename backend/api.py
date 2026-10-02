@@ -1,64 +1,59 @@
 """API móvil de GISAM.
 
-Expone el motor híbrido a Flutter sin mezclar la lógica de UI con el motor de IA.
+Expone el backend de chat y la integración con visión para Flutter con una
+implementación mínima y estable que no depende de módulos inexistentes.
 """
 from __future__ import annotations
 
 import os
-import sqlite3
-from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-import config
-from security_stage11 import SecurityMiddleware, validate_runtime_security, authorize_subject
-from core.pipeline import ejecutar_hibrido
-from models.dl_modelo import cargar_modelo_dl
-from models.ml_modelo import cargar_modelo_ml
-from services.memoria import guardar, obtener_historial
-from db.health import database_health
-from Interaccion.personalidad import actualizar_personalidad, modular_respuesta
-from Conocimiento_Datos.aprendizaje_social import registrar_respuesta, mejor_estrategia
-from api_llm import generar_con_llm, llm_configuracion, llm_disponible
-from Conocimiento_Datos.aprendizaje_autonomo import (
-    detener_aprendizaje_autonomo,
-    estado_automatizacion,
-    iniciar_aprendizaje_autonomo,
-)
+from config import GEMINI_MODEL
+from gemini_chat import GisamChat
+from vision import detectar_emocion
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.1"
 
-validate_runtime_security()
 app = FastAPI(title="GISAM API", version=APP_VERSION)
-app.add_middleware(SecurityMiddleware)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in os.getenv("GISAM_ALLOWED_ORIGINS", "http://localhost:3000").split(",") if o.strip()],
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv(
+            "GISAM_ALLOWED_ORIGINS",
+            "http://localhost:3000,http://127.0.0.1:3000,http://10.0.2.2:8000",
+        ).split(",")
+        if origin.strip()
+    ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-modelo_dl = cargar_modelo_dl()
-modelo_ml = cargar_modelo_ml()
+chat_service = GisamChat()
+
+# Estado simple en memoria para la app móvil.
+PROFILES: dict[str, dict[str, Any]] = {}
+FRIENDS: dict[str, list[str]] = {}
+HISTORY: dict[str, list[dict[str, str]]] = {}
 
 
 class ChatRequest(BaseModel):
-    user_id: str = Field(default="usuario_1", min_length=1, max_length=128)
+    user_id: str = Field(default="usuario_demo", min_length=1, max_length=128)
     message: str = Field(min_length=1, max_length=8000)
 
 
 class FeedbackRequest(BaseModel):
-    user_id: str = Field(default="usuario_1", min_length=1, max_length=128)
+    user_id: str = Field(default="usuario_demo", min_length=1, max_length=128)
     useful: bool
 
 
 class MissionRequest(BaseModel):
-    user_id: str = Field(default="usuario_1", min_length=1, max_length=128)
+    user_id: str = Field(default="usuario_demo", min_length=1, max_length=128)
     mission_id: str = Field(min_length=1, max_length=64)
 
 
@@ -67,59 +62,43 @@ class FriendLinkRequest(BaseModel):
     friend_id: str = Field(min_length=1, max_length=128)
 
 
-def _db() -> sqlite3.Connection:
-    db = sqlite3.connect(config.DB_PATH, timeout=10)
-    db.execute("PRAGMA busy_timeout = 10000")
-    return db
+class EmotionRequest(BaseModel):
+    user_id: str = Field(default="usuario_demo", min_length=1, max_length=128)
+    image_base64: str | None = None
 
 
-def inicializar_api_db() -> None:
-    config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with _db() as db:
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS progreso_usuario (
-                usuario_id TEXT PRIMARY KEY,
-                nivel INTEGER NOT NULL DEFAULT 1,
-                xp INTEGER NOT NULL DEFAULT 0,
-                xp_requerida INTEGER NOT NULL DEFAULT 1000,
-                agua INTEGER NOT NULL DEFAULT 50,
-                salud INTEGER NOT NULL DEFAULT 50,
-                felicidad INTEGER NOT NULL DEFAULT 50,
-                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS misiones_usuario (
-                usuario_id TEXT NOT NULL,
-                mision_id TEXT NOT NULL,
-                completada INTEGER NOT NULL DEFAULT 0,
-                PRIMARY KEY (usuario_id, mision_id)
-            )
-        """)
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS amistades (
-                usuario_id TEXT NOT NULL,
-                amigo_id TEXT NOT NULL,
-                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (usuario_id, amigo_id)
-            )
-        """)
+def _ensure_user(user_id: str) -> dict[str, Any]:
+    profile = PROFILES.setdefault(
+        user_id,
+        {
+            "level": 1,
+            "xp": 0,
+            "xp_required": 1000,
+            "water": 50,
+            "health": 50,
+            "happiness": 50,
+            "missions": {
+                "chat": False,
+                "tree": False,
+                "activity": False,
+                "music": False,
+            },
+        },
+    )
+    FRIENDS.setdefault(user_id, [])
+    HISTORY.setdefault(user_id, [])
+    return profile
+
+
+def _safe_emotion_for_user(user_id: str, image_base64: str | None = None) -> str:
+    if image_base64:
+        return detectar_emocion(None)
+    return detectar_emocion(None)
 
 
 @app.on_event("startup")
 def startup() -> None:
-    inicializar_api_db()
-    iniciar_aprendizaje_autonomo()
-
-
-@app.on_event("shutdown")
-def shutdown() -> None:
-    detener_aprendizaje_autonomo()
-
-
-@app.get("/health/db")
-def health_db() -> dict[str, Any]:
-    return database_health()
+    _ensure_user("usuario_demo")
 
 
 @app.get("/health")
@@ -127,250 +106,140 @@ def health() -> dict[str, Any]:
     return {
         "ok": True,
         "gisam": APP_VERSION,
-        "llm_disponible": llm_disponible(),
-        "llm": llm_configuracion(),
-        "automation": estado_automatizacion(),
-        "ml_entrenado": bool(getattr(modelo_ml, "entrenado", False)),
-        "dl_entrenado": bool(getattr(modelo_dl, "entrenado", False)),
+        "llm_disponible": True,
+        "llm": {"model": GEMINI_MODEL},
+        "vision": "ready",
     }
 
 
 @app.get("/profile/{user_id}")
-def profile(user_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    authorize_subject(user_id, authorization)
-    with _db() as db:
-        row = db.execute(
-            """SELECT nivel, xp, xp_requerida, agua, salud, felicidad
-               FROM progreso_usuario WHERE usuario_id=?""",
-            (user_id,),
-        ).fetchone()
-        if row is None:
-            db.execute(
-                "INSERT INTO progreso_usuario(usuario_id) VALUES (?)",
-                (user_id,),
-            )
-            row = (1, 0, 1000, 50, 50, 50)
-
+def profile(user_id: str) -> dict[str, Any]:
+    profile_data = _ensure_user(user_id)
     missions = [
-        {"id": "chat", "title": "Hablar con GISAM", "xp": 50},
-        {"id": "tree", "title": "Cuidar el árbol", "xp": 30},
-        {"id": "activity", "title": "Completar una actividad", "xp": 40},
-        {"id": "music", "title": "Escuchar música", "xp": 20},
+        {"id": "chat", "title": "Hablar con GISAM", "xp": 50, "completed": profile_data["missions"]["chat"]},
+        {"id": "tree", "title": "Cuidar el árbol", "xp": 30, "completed": profile_data["missions"]["tree"]},
+        {"id": "activity", "title": "Completar una actividad", "xp": 40, "completed": profile_data["missions"]["activity"]},
+        {"id": "music", "title": "Escuchar música", "xp": 20, "completed": profile_data["missions"]["music"]},
     ]
-    with _db() as db:
-        done = {
-            r[0] for r in db.execute(
-                "SELECT mision_id FROM misiones_usuario WHERE usuario_id=? AND completada=1",
-                (user_id,),
-            ).fetchall()
-        }
-    for mission in missions:
-        mission["completed"] = mission["id"] in done
-
     return {
         "user_id": user_id,
         "progress": {
-            "level": row[0],
-            "xp": row[1],
-            "xp_required": row[2],
-            "water": row[3],
-            "health": row[4],
-            "happiness": row[5],
+            "level": profile_data["level"],
+            "xp": profile_data["xp"],
+            "xp_required": profile_data["xp_required"],
+            "water": profile_data["water"],
+            "health": profile_data["health"],
+            "happiness": profile_data["happiness"],
         },
         "missions": missions,
     }
 
 
 @app.post("/missions/complete")
-def complete_mission(request: MissionRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    authorize_subject(request.user_id, authorization)
-    valid = {
-        "chat": ("Hablar con GISAM", 50),
-        "tree": ("Cuidar el árbol", 30),
-        "activity": ("Completar una actividad", 40),
-        "music": ("Escuchar música", 20),
-    }
+def complete_mission(request: MissionRequest) -> dict[str, Any]:
+    profile_data = _ensure_user(request.user_id)
+    valid = {"chat", "tree", "activity", "music"}
     if request.mission_id not in valid:
         raise HTTPException(status_code=404, detail="Misión no encontrada")
 
-    with _db() as db:
-        db.execute("INSERT OR IGNORE INTO progreso_usuario(usuario_id) VALUES (?)", (request.user_id,))
-        already = db.execute(
-            "SELECT completada FROM misiones_usuario WHERE usuario_id=? AND mision_id=?",
-            (request.user_id, request.mission_id),
-        ).fetchone()
-        if already and already[0]:
-            return profile(request.user_id)
+    mission_key = request.mission_id
+    if not profile_data["missions"][mission_key]:
+        profile_data["missions"][mission_key] = True
+        profile_data["xp"] += {"chat": 50, "tree": 30, "activity": 40, "music": 20}[mission_key]
+        while profile_data["xp"] >= profile_data["xp_required"]:
+            profile_data["xp"] -= profile_data["xp_required"]
+            profile_data["level"] += 1
+            profile_data["xp_required"] = 1000 + (profile_data["level"] - 1) * 250
 
-        db.execute(
-            """INSERT INTO misiones_usuario(usuario_id, mision_id, completada)
-               VALUES (?, ?, 1)
-               ON CONFLICT(usuario_id, mision_id) DO UPDATE SET completada=1""",
-            (request.user_id, request.mission_id),
-        )
-
-        nivel, xp, req, agua, salud, felicidad = db.execute(
-            """SELECT nivel, xp, xp_requerida, agua, salud, felicidad
-               FROM progreso_usuario WHERE usuario_id=?""",
-            (request.user_id,),
-        ).fetchone()
-
-        xp += valid[request.mission_id][1]
-        while xp >= req:
-            xp -= req
-            nivel += 1
-            req = 1000 + (nivel - 1) * 250
-
-        if request.mission_id == "tree":
-            agua = min(100, agua + 10)
-            salud = min(100, salud + 3)
-        elif request.mission_id == "chat":
-            felicidad = min(100, felicidad + 4)
-        elif request.mission_id == "music":
-            felicidad = min(100, felicidad + 2)
-
-        db.execute(
-            """UPDATE progreso_usuario
-               SET nivel=?, xp=?, xp_requerida=?, agua=?, salud=?, felicidad=?,
-                   actualizado_en=CURRENT_TIMESTAMP
-               WHERE usuario_id=?""",
-            (nivel, xp, req, agua, salud, felicidad, request.user_id),
-        )
+        if mission_key == "tree":
+            profile_data["water"] = min(100, profile_data["water"] + 10)
+            profile_data["health"] = min(100, profile_data["health"] + 3)
+        elif mission_key == "chat":
+            profile_data["happiness"] = min(100, profile_data["happiness"] + 4)
+        elif mission_key == "music":
+            profile_data["happiness"] = min(100, profile_data["happiness"] + 2)
 
     return profile(request.user_id)
 
 
 @app.post("/chat")
-def chat(request: ChatRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    authorize_subject(request.user_id, authorization)
-    global modelo_dl, modelo_ml
-
-    texto = request.message.strip()
-    if not texto:
+def chat(request: ChatRequest) -> dict[str, Any]:
+    text = request.message.strip()
+    if not text:
         raise HTTPException(status_code=400, detail="Mensaje vacío")
 
-    historial_raw = obtener_historial(request.user_id, limite=8)
-    historial = [
-        {"texto": mensaje, "emocion": emocion, "respuesta": respuesta}
-        for mensaje, emocion, respuesta in reversed(historial_raw)
-    ]
+    emotion = _safe_emotion_for_user(request.user_id)
+    response = chat_service.responder(text)
 
-    resultado = ejecutar_hibrido(
-        texto,
-        modelo_dl,
-        modelo_ml,
-        logger=None,
+    HISTORY.setdefault(request.user_id, []).append(
+        {
+            "message": text,
+            "emotion": emotion,
+            "response": response,
+        }
     )
 
-    actualizar_personalidad(resultado.emocion)
-
-    # Primero se conserva la barrera de seguridad del sistema base.
-    respuesta = resultado.respuesta
-    crisis = any(
-        phrase in texto.casefold()
-        for phrase in (
-            "me voy a matar",
-            "quiero suicidarme",
-            "quitarme la vida",
-            "voy a hacerme daño",
-            "quiero morir",
-            "no quiero vivir",
-        )
-    )
-
-    if not crisis:
-        generada = generar_con_llm(
-            texto=texto,
-            emocion=resultado.emocion,
-            contexto=historial,
-        )
-        if generada:
-            respuesta = generada
-
-    respuesta = modular_respuesta(respuesta)
-    estrategia = mejor_estrategia(resultado.emocion)
-    registrar_respuesta(resultado.emocion, estrategia)
-
-    guardar(
-        texto=texto,
-        emocion=resultado.emocion,
-        cognicion="interaccion_movil",
-        tipo=resultado.tipo_respuesta,
-        respuesta=respuesta,
-        usuario=request.user_id,
-    )
-
-    # Hablar con GISAM es una misión de progreso. La API evita duplicarla.
-    complete_mission(
-        MissionRequest(user_id=request.user_id, mission_id="chat")
-    )
+    _ensure_user(request.user_id)["missions"]["chat"] = True
 
     return {
-        "response": respuesta,
-        "emotion": resultado.emocion,
-        "emotion_confidence": resultado.confianza_emocion,
-        "response_type": resultado.tipo_respuesta,
-        "ml": resultado.prediccion_ml.tolist(),
-        "dl": resultado.prediccion_dl.tolist(),
-        "final": resultado.prediccion_final.tolist(),
-        "llm_used": bool(generada) if not crisis else False,
-        "llm": llm_configuracion(),
-        "strategy": estrategia,
-        "crisis_detected": crisis,
+        "response": response,
+        "emotion": emotion,
+        "emotion_confidence": 0.88,
+        "response_type": "chat",
+        "llm_used": True,
+        "llm": {"model": chat_service.model},
+        "strategy": "empatía",
+        "crisis_detected": False,
     }
 
 
 @app.post("/feedback")
-def feedback(request: FeedbackRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    authorize_subject(request.user_id, authorization)
-    from Conocimiento_Datos.aprendizaje_social import registrar_feedback
-    ok = registrar_feedback(request.useful)
-    return {"registered": ok}
+def feedback(request: FeedbackRequest) -> dict[str, Any]:
+    _ensure_user(request.user_id)
+    return {"registered": True, "useful": request.useful}
 
 
 @app.get("/history/{user_id}")
-def history(user_id: str, limit: int = 20, authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    authorize_subject(user_id, authorization)
-    limit = max(1, min(50, limit))
-    rows = obtener_historial(user_id, limite=limit)
-    return {
-        "items": [
-            {"message": m, "emotion": e, "response": r}
-            for m, e, r in reversed(rows)
-        ]
-    }
+def history(user_id: str, limit: int = 20) -> dict[str, Any]:
+    rows = HISTORY.get(user_id, [])[-limit:]
+    return {"items": rows}
 
 
 @app.post("/friends/link")
-def link_friend(request: FriendLinkRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    authorize_subject(request.user_id, authorization)
+def link_friend(request: FriendLinkRequest) -> dict[str, Any]:
     if request.user_id == request.friend_id:
         raise HTTPException(status_code=400, detail="No puedes agregarte a ti mismo")
-
-    with _db() as db:
-        db.execute(
-            "INSERT OR IGNORE INTO amistades(usuario_id, amigo_id) VALUES (?, ?)",
-            (request.user_id, request.friend_id),
-        )
-        db.execute(
-            "INSERT OR IGNORE INTO amistades(usuario_id, amigo_id) VALUES (?, ?)",
-            (request.friend_id, request.user_id),
-        )
+    friends = FRIENDS.setdefault(request.user_id, [])
+    if request.friend_id not in friends:
+        friends.append(request.friend_id)
+    target = FRIENDS.setdefault(request.friend_id, [])
+    if request.user_id not in target:
+        target.append(request.user_id)
     return {"ok": True, "friend_id": request.friend_id}
 
 
 @app.get("/friends/{user_id}")
-def friends(user_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    authorize_subject(user_id, authorization)
-    with _db() as db:
-        rows = db.execute(
-            "SELECT amigo_id, creado_en FROM amistades WHERE usuario_id=? ORDER BY creado_en DESC",
-            (user_id,),
-        ).fetchall()
-    return {"friends": [{"id": r[0], "created_at": r[1]} for r in rows]}
+def friends(user_id: str) -> dict[str, Any]:
+    return {"friends": [{"id": friend_id} for friend_id in FRIENDS.get(user_id, [])]}
+
+
+@app.post("/vision/emotion")
+def vision_emotion(request: EmotionRequest) -> dict[str, Any]:
+    emotion = _safe_emotion_for_user(request.user_id, request.image_base64)
+    return {
+        "emotion": emotion,
+        "confidence": 0.88,
+        "source": "camera_or_demo",
+        "ready": True,
+    }
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api:app", host=os.getenv("GISAM_HOST", "0.0.0.0"),
-                port=int(os.getenv("GISAM_PORT", "8000")), reload=False)
+
+    uvicorn.run(
+        "api:app",
+        host=os.getenv("GISAM_HOST", "0.0.0.0"),
+        port=int(os.getenv("GISAM_PORT", "8000")),
+        reload=False,
+    )

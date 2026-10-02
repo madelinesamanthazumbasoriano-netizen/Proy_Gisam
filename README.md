@@ -1,36 +1,73 @@
-# GISAM · Flutter + Gemini
+# GISAM Flutter + Gemini
 
-Base funcional de GISAM con Flutter, SQLite y el motor Gemini que ya existía en el proyecto original.
+Aplicación Flutter conectada a una API FastAPI que utiliza Gemini.
 
-## Estructura
-- `lib/`: aplicación Flutter.
-- `lib/screens/`: Inicio, IA/Chat, Amigos/QR, Música, Comunidad, Videojuego, Tienda y Ajustes.
-- `lib/services/database_service.dart`: SQLite para progreso/XP, misiones, amistades y memoria del chat.
-- `lib/services/gemini_service.dart`: cliente HTTP hacia el backend Gemini.
-- `backend/`: API Python que conserva Gemini como motor de conversación.
-- `assets/themes/`: preparada para los JPG de temas.
+## Requisitos
 
-## Ejecutar backend
-```bash
+- Flutter instalado y disponible en `PATH`.
+- Python 3.10 o posterior.
+- Una clave válida de Gemini configurada en `backend/.env` como `GEMINI_API_KEY`.
+
+## Instalar dependencias del backend
+
+En PowerShell, desde la raíz del repositorio:
+
+```powershell
 cd backend
-python -m venv .venv
-# Windows PowerShell
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-copy .env.example .env
-# Edita .env y coloca GEMINI_API_KEY
-python server.py
+python -m pip install -r requirements.txt
 ```
 
-## Ejecutar Flutter
-```bash
+No compartas ni subas `backend/.env` al repositorio.
+
+## Iniciar la API
+
+Desde la carpeta `backend`:
+
+```powershell
+python -m uvicorn api:app --host 0.0.0.0 --port 8000
+```
+
+Comprueba que el backend esté disponible en `http://127.0.0.1:8000/health`.
+La app usa esta API FastAPI en el puerto `8000`. `backend/server.py` es un
+servidor Flask antiguo de pruebas en el puerto `5000`; no es el servidor que
+consume la app móvil.
+
+## Iniciar Flutter
+
+En otra terminal, desde la raíz del repositorio:
+
+```powershell
+cd mobile
 flutter pub get
 flutter run
 ```
 
-En Android Emulator, el backend local se alcanza mediante `10.0.2.2:5000`. En un teléfono físico cambia `baseUrl` de `GeminiService` por la IP local del PC, por ejemplo `http://192.168.1.10:5000`.
+En el emulador Android, Flutter usa por defecto `http://10.0.2.2:8000`, que
+redirige al PC anfitrión. En un teléfono físico, conecta ambos dispositivos a
+la misma red y pasa la IP local del PC:
 
-## Nota sobre los recursos visuales
-El ZIP recibido en esta conversación no contiene los JPG mencionados en la documentación, por lo que `assets/themes/` queda preparado pero no incluye imágenes inventadas. Copia allí los archivos reales y ya están declarados en `pubspec.yaml`.
-# Proy_Gisam
-# Proy_Gisam
+```powershell
+flutter run --dart-define=GISAM_API_URL=http://192.168.1.10:8000
+```
+
+Sustituye `192.168.1.10` por la dirección IPv4 del PC (`ipconfig`). Permite
+el puerto `8000` en el Firewall de Windows para redes privadas si el teléfono
+no logra acceder. El tráfico HTTP está habilitado para desarrollo local; usa
+HTTPS antes de publicar la aplicación.
+
+Si el teléfono está conectado por USB, puedes evitar la configuración Wi-Fi
+con el túnel de ADB:
+
+```powershell
+adb devices
+adb -s <serial-del-telefono> reverse tcp:8000 tcp:8000
+flutter run -d <serial-del-telefono> --dart-define=GISAM_API_URL=http://127.0.0.1:8000
+```
+
+## Diagnóstico
+
+- Si `/health` no responde en el PC, revisa la terminal donde ejecutaste Uvicorn.
+- Si `/health` responde en el PC pero no en Android, revisa la URL, el Firewall
+  y que el emulador/teléfono pueda alcanzar el PC.
+- Si `/chat` responde con error `500`, revisa la terminal del backend y valida
+  la clave y el modelo configurados para Gemini en `backend/.env`.

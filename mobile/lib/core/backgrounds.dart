@@ -52,9 +52,20 @@ class GisamBackgrounds {
   static const String defaultAssetPath = 'assets/themes/theme 1.jpg';
 
   static String normalize(String? assetPath) {
-    return options.any((option) => option.assetPath == assetPath)
-        ? assetPath!
-        : defaultAssetPath;
+    final candidate = assetPath?.trim() ?? '';
+    if (candidate.isEmpty) {
+      return defaultAssetPath;
+    }
+
+    final normalized = candidate.replaceAll(RegExp(r'\s+'), ' ');
+    for (final option in options) {
+      final optionPath = option.assetPath.trim();
+      if (optionPath.toLowerCase() == normalized.toLowerCase()) {
+        return option.assetPath;
+      }
+    }
+
+    return defaultAssetPath;
   }
 }
 
@@ -71,21 +82,42 @@ class GisamBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final safeAsset = GisamBackgrounds.normalize(assetPath);
 
     return Stack(
       fit: StackFit.expand,
       children: [
         Image.asset(
-          assetPath,
+          safeAsset,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const ColoredBox(
-            color: Color(0xFFF7F8FC),
+          filterQuality: FilterQuality.high,
+          color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.08),
+          colorBlendMode: BlendMode.darken,
+          errorBuilder: (_, __, ___) => const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFF6D7E8), Color(0xFFEDEBFF)],
+              ),
+            ),
           ),
         ),
-        ColoredBox(
-          color: isDark
-              ? Colors.black.withValues(alpha: 0.34)
-              : Colors.white.withValues(alpha: 0.24),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  isDark
+                      ? Colors.black.withValues(alpha: 0.36)
+                      : Colors.white.withValues(alpha: 0.18),
+                ],
+              ),
+            ),
+          ),
         ),
         child,
       ],

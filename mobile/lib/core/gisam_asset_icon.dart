@@ -14,8 +14,16 @@ class GisamAssetIcon extends StatelessWidget {
     this.borderRadius = 9,
   });
 
+  static String normalizeAssetPath(String value) {
+    final cleaned = value.trim();
+    if (cleaned.isEmpty) return cleaned;
+    return cleaned.replaceAll(RegExp(r'\s+'), ' ');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final safeAssetPath = normalizeAssetPath(assetPath);
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       width: size,
@@ -38,14 +46,22 @@ class GisamAssetIcon extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius - 1),
-        child: Image.asset(
-          assetPath,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.image_not_supported_outlined,
-            size: size * 0.75,
-          ),
-        ),
+        child: safeAssetPath.isEmpty
+            ? Icon(
+                Icons.image_not_supported_outlined,
+                size: size * 0.75,
+                color: Theme.of(context).colorScheme.primary,
+              )
+            : Image.asset(
+                safeAssetPath,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.high,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.image_not_supported_outlined,
+                  size: size * 0.75,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
       ),
     );
   }

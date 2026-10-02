@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../core/gisam_controller.dart';
+import '../../core/services/api_service.dart';
 
 class ChatbotPage extends StatefulWidget {
   final GisamController controller;
@@ -44,7 +46,8 @@ class _ChatbotPageState extends State<ChatbotPage> {
       setState(() {
         messages.add({
           'role': 'gisam',
-          'text': 'No pude conectar con el motor de GISAM. Revisa el servidor y la URL de la API.',
+          'text':
+              'Falló la solicitud a GISAM en ${ApiService.baseUrl}. Detalle: $e',
         });
       });
     } finally {
@@ -54,7 +57,8 @@ class _ChatbotPageState extends State<ChatbotPage> {
 
   Future<void> rate(bool useful) async {
     try {
-      await widget.controller.api.sendFeedback(widget.controller.userId, useful);
+      await widget.controller.api
+          .sendFeedback(widget.controller.userId, useful);
       if (mounted) setState(() => canRate = false);
     } catch (_) {}
   }
@@ -68,7 +72,8 @@ class _ChatbotPageState extends State<ChatbotPage> {
             padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('GISAM IA', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+              child: Text('GISAM IA',
+                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
             ),
           ),
           Expanded(
@@ -79,7 +84,8 @@ class _ChatbotPageState extends State<ChatbotPage> {
                 final m = messages[i];
                 final user = m['role'] == 'user';
                 return Align(
-                  alignment: user ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment:
+                      user ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     constraints: const BoxConstraints(maxWidth: 330),
                     margin: const EdgeInsets.only(bottom: 10),
@@ -118,8 +124,12 @@ class _ChatbotPageState extends State<ChatbotPage> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   const Text('¿Te sirvió?'),
-                  IconButton(onPressed: () => rate(true), icon: const Icon(Icons.thumb_up_outlined)),
-                  IconButton(onPressed: () => rate(false), icon: const Icon(Icons.thumb_down_outlined)),
+                  IconButton(
+                      onPressed: () => rate(true),
+                      icon: const Icon(Icons.thumb_up_outlined)),
+                  IconButton(
+                      onPressed: () => rate(false),
+                      icon: const Icon(Icons.thumb_down_outlined)),
                 ],
               ),
             ),

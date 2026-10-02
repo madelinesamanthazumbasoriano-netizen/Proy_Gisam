@@ -300,6 +300,30 @@ class _ThemePreviewCard extends StatelessWidget {
                 Image.asset(
                   option.assetPath,
                   fit: BoxFit.cover,
+                  filterQuality: FilterQuality.high,
+                  errorBuilder: (_, __, ___) => const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFFFE0F2), Color(0xFFE8E6FF)],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.64),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
                 Align(
                   alignment: Alignment.bottomCenter,
@@ -309,7 +333,7 @@ class _ThemePreviewCard extends StatelessWidget {
                       horizontal: 10,
                       vertical: 9,
                     ),
-                    color: Colors.black.withValues(alpha: 0.48),
+                    color: Colors.black.withValues(alpha: 0.16),
                     child: Text(
                       option.label,
                       maxLines: 1,
@@ -318,6 +342,7 @@ class _ThemePreviewCard extends StatelessWidget {
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
+                        letterSpacing: 0.1,
                       ),
                     ),
                   ),

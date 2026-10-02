@@ -26,4 +26,11 @@ flutter:
   uses-material-design: true
   assets:
     - assets/themes/
+    - assets/themes/ajustes/
+    - assets/themes/comunidad/
+    - assets/themes/ia/
+    - assets/themes/inicio/
+    - assets/themes/musica/
+    - assets/themes/perfil/
+    - assets/themes/tienda/
     - assets/app_icon.png
