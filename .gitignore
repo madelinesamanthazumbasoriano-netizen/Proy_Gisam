@@ -1,1 +1,6 @@
 backend/.env
+**/serviceAccount*.json
+**/firebase-adminsdk*.json
+**/node_modules/
+**/.kotlin/
+firebase-debug.log

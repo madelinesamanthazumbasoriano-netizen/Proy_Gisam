@@ -3,30 +3,41 @@ import 'package:flutter/material.dart';
 import '../../core/backgrounds.dart';
 import '../../core/gisam_asset_icon.dart';
 import '../../core/gisam_controller.dart';
+import '../../core/services/firebase_account_service.dart';
+import '../../core/services/gisam_economy.dart';
 import '../chatbot/chatbot_page.dart';
 import '../community/community_page.dart';
 import '../friends/friends_page.dart';
 import '../game/game_page.dart';
 import '../home/home_page.dart';
 import '../music/music_page.dart';
+import '../pets/pets_page.dart';
 import '../profile/profile_page.dart';
 import '../settings/settings_page.dart';
 import '../store/store_page.dart';
 
 class GisamShell extends StatefulWidget {
   final GisamController controller;
+  final GisamEconomy economy;
+  final GisamAccount? account;
+  final String? accountError;
+  final Future<GisamAccount> Function() onSignIn;
+  final Future<void> Function() onSignOut;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
   final String backgroundAsset;
-  final ValueChanged<String> onBackgroundChanged;
 
   const GisamShell({
     super.key,
     required this.controller,
+    required this.economy,
+    required this.account,
+    required this.accountError,
+    required this.onSignIn,
+    required this.onSignOut,
     required this.themeMode,
     required this.onThemeModeChanged,
     required this.backgroundAsset,
-    required this.onBackgroundChanged,
   });
 
   @override
@@ -37,9 +48,10 @@ class _GisamShellState extends State<GisamShell> {
   int index = 0;
 
   List<Widget> get pages => [
-        HomePage(controller: widget.controller),
+        HomePage(controller: widget.controller, economy: widget.economy),
         FriendsPage(controller: widget.controller),
-        MusicPage(controller: widget.controller),
+        MusicPage(
+            controller: widget.controller, accountId: widget.account?.uid),
         CommunityPage(),
         ChatbotPage(controller: widget.controller),
       ];
@@ -100,14 +112,20 @@ class _GisamShellState extends State<GisamShell> {
           ),
           actions: [
             Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: colors.surface.withValues(alpha: 0.82),
-                child: Icon(
-                  Icons.favorite_rounded,
-                  size: 19,
-                  color: colors.primary,
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                onPressed: () => _openPage(
+                  StorePage(
+                    economy: widget.economy,
+                    onOpenPets: () =>
+                        _openPage(PetsPage(economy: widget.economy)),
+                  ),
+                ),
+                icon: const Text('🪙'),
+                label: Text('${widget.economy.coins}'),
+                style: TextButton.styleFrom(
+                  backgroundColor: colors.surface.withValues(alpha: 0.82),
+                  shape: const StadiumBorder(),
                 ),
               ),
             ),
@@ -123,23 +141,47 @@ class _GisamShellState extends State<GisamShell> {
                 setState(() => index = 0);
                 return;
               case 1:
-                _openPage(ProfilePage(controller: widget.controller));
+                _openPage(
+                  ProfilePage(
+                    controller: widget.controller,
+                    economy: widget.economy,
+                    account: widget.account,
+                    isFirebaseConfigured: GisamFirebaseConfig.isConfigured,
+                    onSignIn: widget.onSignIn,
+                    onSignOut: widget.onSignOut,
+                  ),
+                );
                 return;
               case 2:
-                _openPage(const StorePage());
+                _openPage(
+                  StorePage(
+                    economy: widget.economy,
+                    onOpenPets: () =>
+                        _openPage(PetsPage(economy: widget.economy)),
+                  ),
+                );
                 return;
               case 3:
+                _openPage(PetsPage(economy: widget.economy));
+                return;
+              case 4:
                 _openPage(
                   SettingsPage(
                     themeMode: widget.themeMode,
                     onThemeModeChanged: widget.onThemeModeChanged,
                     backgroundAsset: widget.backgroundAsset,
-                    onBackgroundChanged: widget.onBackgroundChanged,
+                    onOpenStore: () => _openPage(
+                      StorePage(
+                        economy: widget.economy,
+                        onOpenPets: () =>
+                            _openPage(PetsPage(economy: widget.economy)),
+                      ),
+                    ),
                   ),
                 );
                 return;
-              case 4:
-                _openPage(const GamePage());
+              case 5:
+                _openPage(GamePage(economy: widget.economy));
                 return;
             }
           },
@@ -154,23 +196,29 @@ class _GisamShellState extends State<GisamShell> {
                       'assets/themes/inicio/Logo-inicia.jpg',
                       width: 56,
                       height: 56,
+                      cacheWidth: 112,
                       fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.spa),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Semi_Gisam',
+                          widget.account?.displayName ?? 'Semi_Gisam',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                         SizedBox(height: 2),
-                        Text('Tu espacio, a tu manera'),
+                        Text(
+                          widget.account?.email ?? 'Tu espacio, a tu manera',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ),
                   ),
@@ -208,9 +256,24 @@ class _GisamShellState extends State<GisamShell> {
               label: const Text('Perfil'),
             ),
             NavigationDrawerDestination(
-              icon: const Icon(Icons.storefront_outlined),
-              selectedIcon: const Icon(Icons.storefront),
+              icon: GisamAssetIcon(
+                assetPath: 'assets/themes/tienda/tienda.png',
+              ),
+              selectedIcon: GisamAssetIcon(
+                assetPath: 'assets/themes/tienda/tienda.png',
+                selected: true,
+              ),
               label: const Text('Tienda'),
+            ),
+            NavigationDrawerDestination(
+              icon: GisamAssetIcon(
+                assetPath: 'assets/themes/pets/Pets.png',
+              ),
+              selectedIcon: GisamAssetIcon(
+                assetPath: 'assets/themes/pets/Pets.png',
+                selected: true,
+              ),
+              label: const Text('Mascotas'),
             ),
             NavigationDrawerDestination(
               icon: GisamAssetIcon(
@@ -227,6 +290,14 @@ class _GisamShellState extends State<GisamShell> {
               selectedIcon: const Icon(Icons.sports_esports),
               label: const Text('Videojuego'),
             ),
+            if (widget.accountError != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                child: Text(
+                  'Cuenta: ${widget.accountError}',
+                  style: TextStyle(color: colors.error, fontSize: 12),
+                ),
+              ),
           ],
         ),
         body: IndexedStack(
@@ -262,10 +333,10 @@ class _GisamShellState extends State<GisamShell> {
             destinations: const [
               NavigationDestination(
                 icon: GisamAssetIcon(
-                  assetPath: 'assets/themes/inicio/Arbol.jpg',
+                  assetPath: 'assets/themes/inicio/Inicio.png',
                 ),
                 selectedIcon: GisamAssetIcon(
-                  assetPath: 'assets/themes/inicio/Arbol.jpg',
+                  assetPath: 'assets/themes/inicio/Inicio.png',
                   selected: true,
                 ),
                 label: 'Inicio',

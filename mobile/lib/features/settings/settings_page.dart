@@ -7,14 +7,14 @@ class SettingsPage extends StatefulWidget {
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
   final String backgroundAsset;
-  final ValueChanged<String> onBackgroundChanged;
+  final VoidCallback onOpenStore;
 
   const SettingsPage({
     super.key,
     required this.themeMode,
     required this.onThemeModeChanged,
     required this.backgroundAsset,
-    required this.onBackgroundChanged,
+    required this.onOpenStore,
   });
 
   @override
@@ -26,13 +26,11 @@ class _SettingsPageState extends State<SettingsPage> {
   Map<String, dynamic>? health;
   bool loading = false;
   late ThemeMode _themeMode;
-  late String _backgroundAsset;
 
   @override
   void initState() {
     super.initState();
     _themeMode = widget.themeMode;
-    _backgroundAsset = GisamBackgrounds.normalize(widget.backgroundAsset);
   }
 
   void _changeTheme(bool useDarkTheme) {
@@ -49,11 +47,6 @@ class _SettingsPageState extends State<SettingsPage> {
       health = {'ok': false};
     }
     if (mounted) setState(() => loading = false);
-  }
-
-  void _selectBackground(String assetPath) {
-    setState(() => _backgroundAsset = assetPath);
-    widget.onBackgroundChanged(assetPath);
   }
 
   @override
@@ -95,34 +88,41 @@ class _SettingsPageState extends State<SettingsPage> {
                               ),
                             ),
                             SizedBox(height: 2),
-                            Text('Elige uno de tus fondos guardados.'),
+                            Text(
+                                'Tu fondo activo. Desbloquea otros en la tienda.'),
                           ],
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: GisamBackgrounds.options.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 0.72,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      GisamBackgrounds.normalize(widget.backgroundAsset),
+                      height: 150,
+                      width: double.infinity,
+                      cacheWidth: 720,
+                      fit: BoxFit.cover,
                     ),
-                    itemBuilder: (context, index) {
-                      final option = GisamBackgrounds.options[index];
-                      final selected = option.assetPath == _backgroundAsset;
-
-                      return _ThemePreviewCard(
-                        option: option,
-                        selected: selected,
-                        onTap: () => _selectBackground(option.assetPath),
-                      );
-                    },
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Los demás fondos se desbloquean con monedas en la tienda.',
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.tonalIcon(
+                      onPressed: widget.onOpenStore,
+                      icon: Image.asset(
+                        'assets/themes/tienda/tienda.png',
+                        width: 24,
+                        height: 24,
+                        fit: BoxFit.contain,
+                      ),
+                      label: const Text('Abrir tienda'),
+                    ),
                   ),
                 ],
               ),
@@ -247,128 +247,6 @@ class _SectionTitle extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ThemePreviewCard extends StatelessWidget {
-  final GisamBackgroundOption option;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ThemePreviewCard({
-    required this.option,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: option.label,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected ? colors.primary : colors.outlineVariant,
-              width: selected ? 3 : 1,
-            ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: colors.primary.withValues(alpha: 0.18),
-                      blurRadius: 12,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : null,
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(15),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.asset(
-                  option.assetPath,
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.high,
-                  errorBuilder: (_, __, ___) => const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFFFFE0F2), Color(0xFFE8E6FF)],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.64),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 9,
-                    ),
-                    color: Colors.black.withValues(alpha: 0.16),
-                    child: Text(
-                      option.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                  ),
-                ),
-                if (selected)
-                  Positioned(
-                    top: 9,
-                    right: 9,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: colors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.check,
-                        size: 19,
-                        color: colors.onPrimary,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
@@ -12,9 +14,22 @@ class ApiService {
     defaultValue: 'http://10.0.2.2:8000',
   );
 
+  Future<Map<String, String>> _authorizedHeaders() async {
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (Firebase.apps.isEmpty) return headers;
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
+  }
+
   Future<Map<String, dynamic>> getProfile(String userId) async {
     final r = await http
-        .get(Uri.parse('$baseUrl/profile/$userId'))
+        .get(
+          Uri.parse('$baseUrl/profile/$userId'),
+          headers: await _authorizedHeaders(),
+        )
         .timeout(_requestTimeout);
     _check(r);
     return jsonDecode(r.body) as Map<String, dynamic>;
@@ -25,7 +40,7 @@ class ApiService {
     final r = await http
         .post(
           Uri.parse('$baseUrl/chat'),
-          headers: {'Content-Type': 'application/json'},
+          headers: await _authorizedHeaders(),
           body: jsonEncode({'user_id': userId, 'message': message}),
         )
         .timeout(_chatTimeout);
@@ -38,7 +53,7 @@ class ApiService {
     final r = await http
         .post(
           Uri.parse('$baseUrl/missions/complete'),
-          headers: {'Content-Type': 'application/json'},
+          headers: await _authorizedHeaders(),
           body: jsonEncode({'user_id': userId, 'mission_id': missionId}),
         )
         .timeout(_requestTimeout);
@@ -50,7 +65,7 @@ class ApiService {
     final r = await http
         .post(
           Uri.parse('$baseUrl/friends/link'),
-          headers: {'Content-Type': 'application/json'},
+          headers: await _authorizedHeaders(),
           body: jsonEncode({'user_id': userId, 'friend_id': friendId}),
         )
         .timeout(_requestTimeout);
@@ -77,7 +92,7 @@ class ApiService {
     final r = await http
         .post(
           Uri.parse('$baseUrl/feedback'),
-          headers: {'Content-Type': 'application/json'},
+          headers: await _authorizedHeaders(),
           body: jsonEncode({'user_id': userId, 'useful': useful}),
         )
         .timeout(_requestTimeout);

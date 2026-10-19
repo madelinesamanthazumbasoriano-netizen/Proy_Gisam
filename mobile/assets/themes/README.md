@@ -13,17 +13,23 @@ Los fondos principales están en esta carpeta:
 - `Theme 7.jpg` — Zen minimalista
 - `Theme 8.jpg` — Sakura suave
 
-La selección se guarda con `shared_preferences` y se aplica a toda la interfaz principal.
+El primer fondo es gratuito; los demás se compran con monedas en la tienda.
+Los desbloqueos y el fondo activo se guardan por cuenta en Firestore, o en el
+dispositivo cuando se usa el modo invitado.
 
 ## Iconos de navegación
 
-- `inicio/Arbol.jpg` — Inicio / árbol
-- `inicio/Logo-inicia.jpg` — Logo del menú
+- `inicio/Arbol.jpg` — árbol de Inicio
+- `inicio/Logo-inicia.jpg` — logo de GISAM
 - `Menu.jpg` — botón del menú
 - `musica/Spotify.jpg` — Música
 - `comunidad/Amigos.jpg` — Amigos / Comunidad
 - `ia/Chat-bot.jpg` — IA
 - `ajustes/Ajustes.jpg` — Ajustes
 - `perfil/Perfil.jpg` — Perfil
+- `tienda/tienda.png` — marca de la tienda
+- `pets/` — sprite e imágenes de mascotas
 
-Los fondos 9 y 10 pueden añadirse posteriormente sin cambiar la arquitectura: basta con colocar los archivos y registrar las nuevas opciones en `lib/core/backgrounds.dart`.
+Los fondos adicionales se declaran en `lib/core/backgrounds.dart` y en el
+catálogo validado de `functions/index.js` para que los precios no dependan del
+cliente.

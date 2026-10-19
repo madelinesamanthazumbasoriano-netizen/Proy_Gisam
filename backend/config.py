@@ -5,7 +5,12 @@ from dotenv import load_dotenv
 load_dotenv()
 GEMINI_API_KEY=os.getenv('GEMINI_API_KEY','')
 GEMINI_MODEL=os.getenv('GEMINI_MODEL', 'gemini-3.5-flash-lite').strip() or 'gemini-3.5-flash-lite'
-FACE_EMOTION_MODEL_PATH = Path(os.getenv('FACE_EMOTION_MODEL_PATH', 'models/face_emotion.onnx'))
+FACE_EMOTION_MODEL_PATH = Path(
+    os.getenv(
+        "FACE_EMOTION_MODEL_PATH",
+        str(Path(__file__).resolve().parent / "models" / "face_emotion.onnx"),
+    )
+).expanduser().resolve()
 
 def contruir_prompt(
         texto:str,

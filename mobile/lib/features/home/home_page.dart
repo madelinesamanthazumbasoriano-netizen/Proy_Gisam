@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 
 import '../../core/gisam_controller.dart';
+import '../../core/services/gisam_economy.dart';
+import '../pets/pets_page.dart';
 import 'spirit_tree.dart';
 
 class HomePage extends StatelessWidget {
   final GisamController controller;
+  final GisamEconomy economy;
 
-  const HomePage({super.key, required this.controller});
+  const HomePage({super.key, required this.controller, required this.economy});
 
   @override
   Widget build(BuildContext context) {
     final p = controller.progress;
+    final matchingPets =
+        GisamEconomy.pets.where((pet) => pet.id == economy.activePet).toList();
+    final activePet =
+        matchingPets.isEmpty ? GisamEconomy.pets.first : matchingPets.first;
+    final hasActivePet = matchingPets.isNotEmpty;
 
     return SafeArea(
       child: RefreshIndicator(
@@ -18,9 +26,33 @@ class HomePage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text('GISAM',
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-            const Text('Tu espacio de bienestar y crecimiento'),
+            Row(
+              children: [
+                Image.asset(
+                  'assets/themes/inicio/Logo-inicia.jpg',
+                  width: 58,
+                  height: 58,
+                  cacheWidth: 116,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.spa, size: 48),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'GISAM',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text('Tu espacio de bienestar y crecimiento'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
             Card(
               child: Padding(
@@ -37,6 +69,50 @@ class HomePage extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Card(
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        leading: Container(
+                          width: 76,
+                          height: 76,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF1DF),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Image.asset(
+                            activePet.sprite,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.pets,
+                              size: 40,
+                              color: Color(0xFF8A648D),
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          hasActivePet
+                              ? 'Tu compañera: ${activePet.name}'
+                              : 'Conoce a ${activePet.name}',
+                        ),
+                        subtitle: Text(
+                          hasActivePet
+                              ? 'Cuida de ella y vuelve a visitarla.'
+                              : 'Visita Mascotas para adoptarla gratis.',
+                        ),
+                        trailing: const Icon(Icons.pets_outlined),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PetsPage(economy: economy),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -85,13 +161,26 @@ class HomePage extends StatelessWidget {
                   onTap: mission.completed
                       ? null
                       : () async {
-                          await controller.completeMission(mission.id);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
+                          try {
+                            await controller.completeMission(mission.id);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
                                   content: Text(
-                                      '🎉 ${mission.title} +${mission.xp} XP')),
-                            );
+                                    '¡${mission.title}! +${mission.xp} XP',
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (error) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content:
+                                      Text('No se completó la misión: $error'),
+                                ),
+                              );
+                            }
                           }
                         },
                 ),

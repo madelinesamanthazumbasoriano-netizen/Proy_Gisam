@@ -8,12 +8,13 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from config import GEMINI_MODEL
 from gemini_chat import GisamChat
+from firebase_auth import authenticated_uid, require_owner
 from vision import detectar_emocion
 
 APP_VERSION = "0.2.1"
@@ -96,11 +97,6 @@ def _safe_emotion_for_user(user_id: str, image_base64: str | None = None) -> str
     return detectar_emocion(None)
 
 
-@app.on_event("startup")
-def startup() -> None:
-    _ensure_user("usuario_demo")
-
-
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {
@@ -113,7 +109,11 @@ def health() -> dict[str, Any]:
 
 
 @app.get("/profile/{user_id}")
-def profile(user_id: str) -> dict[str, Any]:
+def profile(
+    user_id: str,
+    authenticated_user: str = Depends(authenticated_uid),
+) -> dict[str, Any]:
+    require_owner(user_id, authenticated_user)
     profile_data = _ensure_user(user_id)
     missions = [
         {"id": "chat", "title": "Hablar con GISAM", "xp": 50, "completed": profile_data["missions"]["chat"]},
@@ -136,8 +136,11 @@ def profile(user_id: str) -> dict[str, Any]:
 
 
 @app.post("/missions/complete")
-def complete_mission(request: MissionRequest) -> dict[str, Any]:
-    profile_data = _ensure_user(request.user_id)
+def complete_mission(
+    request: MissionRequest,
+    authenticated_user: str = Depends(authenticated_uid),
+) -> dict[str, Any]:
+    profile_data = _ensure_user(authenticated_user)
     valid = {"chat", "tree", "activity", "music"}
     if request.mission_id not in valid:
         raise HTTPException(status_code=404, detail="Misión no encontrada")
@@ -159,19 +162,22 @@ def complete_mission(request: MissionRequest) -> dict[str, Any]:
         elif mission_key == "music":
             profile_data["happiness"] = min(100, profile_data["happiness"] + 2)
 
-    return profile(request.user_id)
+    return profile(authenticated_user, authenticated_user)
 
 
 @app.post("/chat")
-def chat(request: ChatRequest) -> dict[str, Any]:
+def chat(
+    request: ChatRequest,
+    authenticated_user: str = Depends(authenticated_uid),
+) -> dict[str, Any]:
     text = request.message.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Mensaje vacío")
 
-    emotion = _safe_emotion_for_user(request.user_id)
+    emotion = _safe_emotion_for_user(authenticated_user)
     response = chat_service.responder(text)
 
-    HISTORY.setdefault(request.user_id, []).append(
+    HISTORY.setdefault(authenticated_user, []).append(
         {
             "message": text,
             "emotion": emotion,
@@ -179,7 +185,7 @@ def chat(request: ChatRequest) -> dict[str, Any]:
         }
     )
 
-    _ensure_user(request.user_id)["missions"]["chat"] = True
+    _ensure_user(authenticated_user)["missions"]["chat"] = True
 
     return {
         "response": response,
@@ -194,38 +200,60 @@ def chat(request: ChatRequest) -> dict[str, Any]:
 
 
 @app.post("/feedback")
-def feedback(request: FeedbackRequest) -> dict[str, Any]:
-    _ensure_user(request.user_id)
+def feedback(
+    request: FeedbackRequest,
+    authenticated_user: str = Depends(authenticated_uid),
+) -> dict[str, Any]:
+    _ensure_user(authenticated_user)
     return {"registered": True, "useful": request.useful}
 
 
 @app.get("/history/{user_id}")
-def history(user_id: str, limit: int = 20) -> dict[str, Any]:
-    rows = HISTORY.get(user_id, [])[-limit:]
+def history(
+    user_id: str,
+    limit: int = 20,
+    authenticated_user: str = Depends(authenticated_uid),
+) -> dict[str, Any]:
+    require_owner(user_id, authenticated_user)
+    rows = HISTORY.get(authenticated_user, [])[-limit:]
     return {"items": rows}
 
 
 @app.post("/friends/link")
-def link_friend(request: FriendLinkRequest) -> dict[str, Any]:
-    if request.user_id == request.friend_id:
+def link_friend(
+    request: FriendLinkRequest,
+    authenticated_user: str = Depends(authenticated_uid),
+) -> dict[str, Any]:
+    if authenticated_user == request.friend_id:
         raise HTTPException(status_code=400, detail="No puedes agregarte a ti mismo")
-    friends = FRIENDS.setdefault(request.user_id, [])
+    friends = FRIENDS.setdefault(authenticated_user, [])
     if request.friend_id not in friends:
         friends.append(request.friend_id)
     target = FRIENDS.setdefault(request.friend_id, [])
-    if request.user_id not in target:
-        target.append(request.user_id)
+    if authenticated_user not in target:
+        target.append(authenticated_user)
     return {"ok": True, "friend_id": request.friend_id}
 
 
 @app.get("/friends/{user_id}")
-def friends(user_id: str) -> dict[str, Any]:
-    return {"friends": [{"id": friend_id} for friend_id in FRIENDS.get(user_id, [])]}
+def friends(
+    user_id: str,
+    authenticated_user: str = Depends(authenticated_uid),
+) -> dict[str, Any]:
+    require_owner(user_id, authenticated_user)
+    return {
+        "friends": [
+            {"id": friend_id} for friend_id in FRIENDS.get(authenticated_user, [])
+        ]
+    }
 
 
 @app.post("/vision/emotion")
-def vision_emotion(request: EmotionRequest) -> dict[str, Any]:
-    emotion = _safe_emotion_for_user(request.user_id, request.image_base64)
+def vision_emotion(
+    request: EmotionRequest,
+    authenticated_user: str = Depends(authenticated_uid),
+) -> dict[str, Any]:
+    emotion = _safe_emotion_for_user(authenticated_user, request.image_base64)
     return {
         "emotion": emotion,
         "confidence": 0.88,

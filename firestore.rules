@@ -1,0 +1,50 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owns(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read: if owns(userId);
+      allow create: if owns(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'photoUrl', 'createdAt', 'updatedAt'
+        ]);
+      allow update: if owns(userId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'email', 'photoUrl', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      match /game/{documentId} {
+        allow read: if owns(userId);
+        allow write: if false;
+      }
+
+      match /friends/{friendId} {
+        allow read: if owns(userId);
+        allow create: if owns(userId)
+          && request.resource.data.friendUid == friendId
+          && request.resource.data.keys().hasOnly(['friendUid', 'createdAt']);
+        allow update, delete: if owns(userId);
+      }
+
+      match /chatHistory/{messageId} {
+        allow read: if owns(userId);
+        allow create: if owns(userId)
+          && request.resource.data.keys().hasOnly([
+            'message', 'response', 'createdAt'
+          ])
+          && request.resource.data.message is string
+          && request.resource.data.message.size() <= 8000
+          && request.resource.data.response is string
+          && request.resource.data.response.size() <= 12000;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
